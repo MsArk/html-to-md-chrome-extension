@@ -221,3 +221,32 @@ body { background: var(--bg); margin: 0; }
   padding: 2px;
 }
 .btn-icon:hover { color: var(--text); }
+
+/* ── Footer doc link ── */
+.popup-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+}
+.popup-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.popup-doc-link:hover {
+  color: var(--accent);
+}
+.popup-doc-link svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}

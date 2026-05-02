@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTML → Markdown Token Analyzer | MsArkNet</title>
+    <meta
+      name="description"
+      content="Extensión Chrome para analizar una pestaña activa, convertir HTML a Markdown y comparar reducción de tokens usando msarknet-convert-html-to-markdown."
+    />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#111418" />
+
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --color-primary: #6c8bff;
+        --color-primary-hover: #7f9cff;
+        --color-accent-teal: #00d2ff;
+        --color-accent-green: #34d399;
+        --color-accent-orange: #ffb86b;
+        --color-surface-dark: #111418;
+        --color-surface-mid: #161922;
+        --color-surface-light: #222638;
+        --color-card: #171b2a;
+        --color-text-main: #f5f7fb;
+        --color-text-soft: #caccd1;
+        --color-text-muted: #8f9ab7;
+        --color-background-dark: #0d1018;
+        --color-brand-deep: #001b4c;
+        --color-brand-surface: #0a2e5b;
+        --color-brand-border: #273968;
+        --radius-sm: 6px;
+        --radius-md: 12px;
+        --radius-lg: 22px;
+        --font-display: "Manrope", "Space Grotesk", sans-serif;
+        --font-body: "Noto Sans", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font-display);
+        font-size: 1rem;
+        line-height: 1.6;
+        color: var(--color-text-soft);
+        background:
+          radial-gradient(circle at top left, rgba(108, 139, 255, 0.18), transparent 34rem),
+          radial-gradient(circle at 80% 10%, rgba(0, 210, 255, 0.12), transparent 30rem),
+          var(--color-background-dark);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        overflow-x: hidden;
+      }
+
+      ::selection {
+        background-color: var(--color-accent-teal);
+        color: var(--color-surface-dark);
+      }
+
+      a {
+        color: var(--color-accent-teal);
+        text-decoration: none;
+        font-weight: 700;
+        transition: color 0.2s ease, text-shadow 0.2s ease;
+      }
+
+      a:hover {
+        color: #fff;
+        text-shadow: 0 0 18px rgba(0, 210, 255, 0.42);
+      }
+
+      .technical-grid-bg {
+        min-height: 100vh;
+        background-size: 40px 40px;
+        background-image:
+          linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+      }
+
+      .wrap {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 34px 0 72px;
+      }
+
+      .brand-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 54px;
+        padding-bottom: 22px;
+        border-bottom: 1px solid rgba(108, 139, 255, 0.2);
+      }
+
+      .brand-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: #fff;
+      }
+
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, rgba(108, 139, 255, 0.22), rgba(0, 210, 255, 0.08));
+        border: 1px solid rgba(108, 139, 255, 0.52);
+        box-shadow: 0 0 28px rgba(108, 139, 255, 0.22);
+      }
+
+      .brand-title {
+        display: grid;
+        line-height: 1.1;
+      }
+
+      .brand-title strong {
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-title span {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--color-text-muted);
+      }
+
+      .top-link {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 390px;
+        gap: 48px;
+        align-items: center;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin-bottom: 1.35rem;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        background: rgba(108, 139, 255, 0.12);
+        border: 1px solid rgba(108, 139, 255, 0.26);
+      }
+
+      .badge-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--color-accent-green);
+        box-shadow: 0 0 16px rgba(52, 211, 153, 0.8);
+        animation: pulse-dot 2.1s ease-in-out infinite;
+      }
+
+      @keyframes pulse-dot {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.45;
+          transform: scale(0.72);
+        }
+      }
+
+      .badge span:last-child {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--color-accent-green);
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 760px;
+        font-size: clamp(2.35rem, 6vw, 5rem);
+        font-weight: 850;
+        line-height: 0.98;
+        letter-spacing: -0.075em;
+        color: #fff;
+      }
+
+      .gradient {
+        background: linear-gradient(90deg, var(--color-accent-teal), var(--color-primary) 48%, #b8c5ff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .lead {
+        max-width: 680px;
+        margin: 1.4rem 0 0;
+        font-family: var(--font-body);
+        font-size: clamp(1.02rem, 1.4vw, 1.18rem);
+        line-height: 1.8;
+        color: var(--color-text-muted);
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+        margin-top: 2rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
+        min-height: 46px;
+        padding: 0.78rem 1.1rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(108, 139, 255, 0.34);
+        background: rgba(108, 139, 255, 0.14);
+        color: #fff;
+        font-weight: 800;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--color-primary), #7f9cff);
+        border-color: rgba(184, 197, 255, 0.55);
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+        margin-top: 1.4rem;
+      }
+
+      .meta-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.45rem 0.7rem;
+        border: 1px solid rgba(108, 139, 255, 0.18);
+        border-radius: 999px;
+        background: rgba(17, 20, 28, 0.7);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        color: var(--color-text-muted);
+      }
+
+      .popup-shell {
+        width: 100%;
+        border: 1px solid rgba(108, 139, 255, 0.26);
+        border-radius: 18px;
+        background:
+          linear-gradient(180deg, rgba(23, 27, 42, 0.98), rgba(15, 18, 29, 0.98)),
+          var(--color-surface-dark);
+        box-shadow:
+          0 28px 90px rgba(0, 0, 0, 0.46),
+          0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+        overflow: hidden;
+      }
+
+      .popup-inner {
+        padding: 18px 16px 16px;
+      }
+
+      .popup-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(108, 139, 255, 0.23);
+      }
+
+      .mini-icon {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(108, 139, 255, 0.65);
+        background: rgba(108, 139, 255, 0.16);
+      }
+
+      .popup-header strong {
+        display: block;
+        color: #fff;
+        font-size: 0.98rem;
+        line-height: 1.1;
+      }
+
+      .popup-header span {
+        display: block;
+        margin-top: 2px;
+        font-size: 0.72rem;
+        color: var(--color-text-muted);
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 13px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(52, 211, 153, 0.38);
+        background: rgba(13, 67, 48, 0.62);
+        color: #dffdf0;
+        font-size: 0.75rem;
+      }
+
+      .status small {
+        color: #8fb0d8;
+        font-family: var(--font-mono);
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .stat-card {
+        padding: 13px 12px;
+        border-radius: 10px;
+        border: 1px solid rgba(108, 139, 255, 0.72);
+        background: rgba(34, 38, 56, 0.6);
+      }
+
+      .stat-card.green {
+        border-color: rgba(52, 211, 153, 0.68);
+      }
+
+      .stat-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: #95a9ff;
+      }
+
+      .stat-card.green .stat-label {
+        color: var(--color-accent-green);
+      }
+
+      .stat-value {
+        color: #fff;
+        font-size: 1.35rem;
+        font-weight: 850;
+        line-height: 1;
+      }
+
+      .stat-value span {
+        margin-left: 3px;
+        color: var(--color-text-muted);
+        font-size: 0.72rem;
+        font-weight: 500;
+      }
+
+      .stat-sub {
+        margin-top: 5px;
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        color: #8f9ab7;
+      }
+
+      .reduction {
+        margin-top: 12px;
+        padding: 9px 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(108, 139, 255, 0.2);
+        background: rgba(108, 139, 255, 0.13);
+        text-align: center;
+        color: var(--color-text-muted);
+        font-size: 0.82rem;
+      }
+
+      .reduction strong {
+        color: var(--color-accent-orange);
+      }
+
+      .preview-box {
+        margin-top: 12px;
+        border: 1px solid rgba(108, 139, 255, 0.22);
+        border-radius: 10px;
+        background: rgba(23, 27, 42, 0.76);
+        overflow: hidden;
+      }
+
+      .preview-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 12px;
+        border-bottom: 1px solid rgba(108, 139, 255, 0.18);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #8fa0c5;
+        text-transform: uppercase;
+      }
+
+      .preview-code {
+        margin: 0;
+        padding: 12px;
+        min-height: 118px;
+        white-space: pre-wrap;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        line-height: 1.65;
+        color: #aebfff;
+      }
+
+      section {
+        margin-top: 72px;
+      }
+
+      .section-head {
+        max-width: 760px;
+        margin-bottom: 24px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.65rem, 3vw, 2.5rem);
+        line-height: 1.1;
+        letter-spacing: -0.055em;
+        color: #fff;
+      }
+
+      .section-head p {
+        margin: 0.8rem 0 0;
+        font-family: var(--font-body);
+        color: var(--color-text-muted);
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .card {
+        position: relative;
+        padding: 24px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(108, 139, 255, 0.18);
+        background:
+          linear-gradient(180deg, rgba(23, 27, 42, 0.94), rgba(17, 20, 28, 0.94)),
+          var(--color-surface-mid);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.26);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        background: linear-gradient(135deg, rgba(108, 139, 255, 0.12), transparent 38%);
+      }
+
+      .card-icon {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 16px;
+        border-radius: 9px;
+        border: 1px solid rgba(0, 210, 255, 0.28);
+        background: rgba(0, 210, 255, 0.08);
+        color: var(--color-accent-teal);
+      }
+
+      .card h3 {
+        position: relative;
+        margin: 0 0 8px;
+        color: #fff;
+        font-size: 1.05rem;
+        letter-spacing: -0.02em;
+      }
+
+      .card p {
+        position: relative;
+        margin: 0;
+        font-family: var(--font-body);
+        font-size: 0.93rem;
+        color: var(--color-text-muted);
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+
+      .flow-step {
+        min-height: 155px;
+      }
+
+      .step-number {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 800;
+        color: var(--color-primary-hover);
+        margin-bottom: 16px;
+      }
+
+      .code-panel {
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(108, 139, 255, 0.22);
+        background: rgba(13, 16, 24, 0.78);
+        overflow: hidden;
+      }
+
+      .code-tabs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 14px;
+        border-bottom: 1px solid rgba(108, 139, 255, 0.18);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        color: var(--color-text-muted);
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: rgba(108, 139, 255, 0.55);
+      }
+
+      pre {
+        margin: 0;
+        padding: 18px;
+        overflow-x: auto;
+        color: #dce5ff;
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        line-height: 1.8;
+      }
+
+      code .comment {
+        color: #74819f;
+      }
+
+      code .string {
+        color: #9be7c8;
+      }
+
+      .permission-table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(108, 139, 255, 0.2);
+        background: rgba(23, 27, 42, 0.72);
+      }
+
+      .permission-table th,
+      .permission-table td {
+        padding: 16px 18px;
+        border-bottom: 1px solid rgba(108, 139, 255, 0.16);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .permission-table th {
+        color: #fff;
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .permission-table td {
+        font-family: var(--font-body);
+        color: var(--color-text-muted);
+      }
+
+      .permission-table tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .permission-table td:first-child {
+        font-family: var(--font-mono);
+        color: var(--color-accent-teal);
+        white-space: nowrap;
+      }
+
+      .footer {
+        margin-top: 72px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(108, 139, 255, 0.2);
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        color: var(--color-text-muted);
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      @media (max-width: 980px) {
+        .hero {
+          grid-template-columns: 1fr;
+        }
+
+        .popup-shell {
+          max-width: 430px;
+        }
+
+        .cards,
+        .flow {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      @media (max-width: 640px) {
+        .wrap {
+          width: min(100% - 28px, 1120px);
+          padding-top: 24px;
+        }
+
+        .brand-bar {
+          margin-bottom: 38px;
+        }
+
+        .top-link {
+          display: none;
+        }
+
+        .hero-actions {
+          flex-direction: column;
+        }
+
+        .btn {
+          width: 100%;
+        }
+
+        .stats-grid,
+        .cards,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .permission-table,
+        .permission-table tbody,
+        .permission-table tr,
+        .permission-table td,
+        .permission-table th {
+          display: block;
+          width: 100%;
+        }
+
+        .permission-table thead {
+          display: none;
+        }
+
+        .permission-table td:first-child {
+          padding-bottom: 4px;
+          border-bottom: 0;
+        }
+
+        .permission-table td:last-child {
+          padding-top: 4px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="technical-grid-bg">
+      <div class="wrap">
+        <header class="brand-bar">
+          <a class="brand-mark" href="https://msarknet.es" rel="noopener noreferrer" target="_blank">
+            <span class="brand-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M8 5L3 12L8 19" stroke="#8fb0ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M16 5L21 12L16 19" stroke="#8fb0ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13.5 4L10.5 20" stroke="#00d2ff" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="brand-title">
+              <strong>MsArkNet</strong>
+              <span>Chrome Extension Lab</span>
+            </span>
+          </a>
+        </header>
+
+        <section class="hero" aria-labelledby="hero-title">
+          <div>
+            <div class="badge" role="status">
+              <span class="badge-dot" aria-hidden="true"></span>
+              <span>Manifest V3 · Token Analyzer</span>
+            </div>
+
+            <h1 id="hero-title">
+              HTML → Markdown <span class="gradient">Analyzer</span>
+            </h1>
+
+            <p class="lead">
+              Extensión Chrome que analiza la pestaña activa, convierte su HTML a Markdown mediante
+              <strong>msarknet-convert-html-to-markdown</strong> y muestra la reducción de tokens lista para copiar o descargar.
+            </p>
+
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#instalacion">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M5 21H19" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+                Instalar extensión
+              </a>
+              <a class="btn" href="#flujo">Ver flujo</a>
+            </div>
+
+            <div class="meta-row" aria-label="Características técnicas">
+              <span class="meta-pill">React + Vite</span>
+              <span class="meta-pill">Chrome MV3</span>
+              <span class="meta-pill">Markdown export</span>
+            </div>
+          </div>
+
+          <aside class="popup-shell" aria-label="Vista previa del popup de la extensión">
+            <div class="popup-inner">
+              <div class="popup-header">
+                <div class="mini-icon" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 18L3 12L9 6" stroke="#9bb0ff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M15 6L21 12L15 18" stroke="#9bb0ff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M13 4L11 20" stroke="#00d2ff" stroke-width="2.1" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <strong>HTML → Markdown</strong>
+                  <span>Token Analyzer</span>
+                </div>
+              </div>
+
+              <div class="status">
+                <span>✓ example.com</span>
+                <small>1023ms</small>
+              </div>
+
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-label">HTML</div>
+                  <div class="stat-value">210.669 <span>tokens</span></div>
+                  <div class="stat-sub">632.760 chars</div>
+                </div>
+
+                <div class="stat-card green">
+                  <div class="stat-label">MARKDOWN</div>
+                  <div class="stat-value">89 <span>tokens</span></div>
+                  <div class="stat-sub">234 chars</div>
+                </div>
+              </div>
+
+              <div class="reduction">⚡ Reducción: <strong>100.0%</strong></div>
+
+              <div class="preview-box">
+                <div class="preview-head">
+                  <span>Vista previa Markdown</span>
+                  <span>⌄</span>
+                </div>
+                <pre class="preview-code">example.com
+
+[Iniciar sesión]
+(https://example.com/ServiceLogin?continue=https://example.google.com/app)</pre>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section id="features" aria-labelledby="features-title">
+          <div class="section-head">
+            <h2 id="features-title">Diseñada para limpiar páginas antes de pasarlas a IA</h2>
+            <p>
+              Convierte contenido HTML pesado en Markdown útil, reduce tokens y mantiene un flujo rápido para análisis,
+              scraping técnico, documentación o prompts con contexto web.
+            </p>
+          </div>
+
+          <div class="cards">
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">⌁</div>
+              <h3>Analiza la pestaña activa</h3>
+              <p>Obtiene la URL actual con permisos mínimos y envía la página al servicio de conversión.</p>
+            </article>
+
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">M↓</div>
+              <h3>HTML a Markdown</h3>
+              <p>Transforma páginas completas en Markdown más compacto, legible y preparado para LLMs.</p>
+            </article>
+
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">%</div>
+              <h3>Comparativa de tokens</h3>
+              <p>Muestra tokens HTML, tokens Markdown, caracteres y porcentaje de reducción en tiempo real.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="flujo" aria-labelledby="flow-title">
+          <div class="section-head">
+            <h2 id="flow-title">Flujo de uso</h2>
+            <p>Un popup sencillo: abrir, analizar, revisar y exportar.</p>
+          </div>
+
+          <div class="flow">
+            <article class="card flow-step">
+              <div class="step-number">01</div>
+              <h3>Abre una web</h3>
+              <p>Navega a cualquier página que quieras resumir, analizar o preparar como contexto.</p>
+            </article>
+
+            <article class="card flow-step">
+              <div class="step-number">02</div>
+              <h3>Analiza</h3>
+              <p>La extensión llama a <strong>/analyze?url=...</strong> usando el servicio configurado.</p>
+            </article>
+
+            <article class="card flow-step">
+              <div class="step-number">03</div>
+              <h3>Compara</h3>
+              <p>Visualiza la reducción de tokens entre el HTML original y el Markdown resultante.</p>
+            </article>
+
+            <article class="card flow-step">
+              <div class="step-number">04</div>
+              <h3>Exporta</h3>
+              <p>Copia el Markdown al portapapeles o descárgalo directamente como archivo <strong>.md</strong>.</p>
+            </article>
+          </div>
+        </section>
+
+        <section aria-labelledby="permissions-title">
+          <div class="section-head">
+            <h2 id="permissions-title">Permisos usados</h2>
+            <p>Solo los permisos necesarios para consultar la pestaña activa y ejecutar el análisis.</p>
+          </div>
+
+          <table class="permission-table">
+            <thead>
+              <tr>
+                <th>Permiso</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>activeTab</td>
+                <td>Permite trabajar sobre la pestaña actual cuando el usuario pulsa el botón de la extensión.</td>
+              </tr>
+              <tr>
+                <td>tabs</td>
+                <td>Consulta la URL activa mediante <strong>chrome.tabs.query</strong>.</td>
+              </tr>
+              <tr>
+                <td>fetch</td>
+                <td>Llama al servidor <strong>msarknet-convert-html-to-markdown</strong> para ejecutar el análisis.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <footer class="footer">
+          <span>HTML → Markdown Token Analyzer · Chrome Extension</span>
+          <span><a href="https://msarknet.es/" target="_blank" rel="noopener noreferrer">MsArkNet</a> · 2026</span>
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>

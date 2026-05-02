@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   Server,
+  ExternalLink,
 } from 'lucide-react';
 import { useAnalyze } from './useAnalyze';
 
@@ -42,6 +43,11 @@ function slugFromUrl(url: string): string {
   } catch {
     return 'page';
   }
+}
+
+function openExtensionHtml(path: string) {
+  const url = chrome.runtime.getURL(path);
+  chrome.tabs.create({ url });
 }
 
 // ─── sub-components ─────────────────────────────────────────────────────────
@@ -219,6 +225,17 @@ export default function Popup() {
           </button>
         </div>
       )}
+
+      <footer className="popup-footer">
+        <button
+          type="button"
+          className="popup-doc-link"
+          onClick={() => openExtensionHtml('preview.html')}
+        >
+          <ExternalLink size={12} aria-hidden />
+          Información de la extensión
+        </button>
+      </footer>
     </div>
   );
 }
