@@ -11,7 +11,6 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
-  Server,
   ExternalLink,
 } from 'lucide-react';
 import { useAnalyze } from './useAnalyze';
