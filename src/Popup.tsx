@@ -139,16 +139,12 @@ export default function Popup() {
       {status === 'idle' && (
         <div className="idle-view">
           <p className="idle-desc">
-            Analiza la pestaña activa: convierte su HTML a Markdown y cuenta tokens GPT-4.
+            Analiza la pestaña activa: convierte su HTML a Markdown y cuenta tokens para la IA.
           </p>
           <button className="btn-primary" onClick={() => analyze()}>
             <Zap size={16} />
             Analizar esta página
           </button>
-          <div className="server-hint">
-            <Server size={12} />
-            <span>Requiere servidor en <code>localhost:3000</code></span>
-          </div>
         </div>
       )}
 
