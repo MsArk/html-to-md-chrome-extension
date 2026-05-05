@@ -14,7 +14,7 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
   - [x] Añadir tipos mínimos para errores JSON del backend (`{ error: { code, message, details? } }`) y, si se implementa flujo async, `AnalyzeQueuedResponse` / `WebhookBody` según `convert-html-to-markdown/src/types.ts`.
 
 - [x] **Cliente HTTP (`src/useAnalyze.ts`)**
-  - [x] **URL base configurable:** dejar de hardcodear `http://localhost:3000` (opciones: `chrome.storage.sync`, opción en popup, o build-time `import.meta.env` si el bundler lo soporta). Documentar default alineado con `PORT` del `.env` del microservicio.
+  - [x] **URL base por build:** usar `import.meta.env` con fallback `http://localhost:3000` y sin configuración editable en popup por usuario final.
   - [x] **Query string GET `/analyze`:** soportar al menos `url` (ya) y, si hay UX, `selector` y `clean` como en el servidor (boolean → `1`/`true` según documentación OpenAPI).
   - [x] **Errores HTTP:** parsear cuerpo `{ error: { code, message } }` en todos los `!response.ok`; mapear códigos conocidos a mensajes claros en español.
   - [x] **202 Accepted (webhook):** mostrar estado “encolado” (sin polling, por ahora).
@@ -32,7 +32,7 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
   - [x] Manejo explícito de 429 en UI y botón de analizar deshabilitado durante la solicitud para evitar doble clic agresivo.
 
 - [x] **Permisos y orígenes (`public/manifest.json`)**
-  - [x] Se agregó `storage` y `host_permissions` acotados para localhost + despliegues típicos (`fly.dev`, `up.railway.app`).
+  - [x] Se retiró `storage` al eliminar configuración de URL en popup; se mantienen `host_permissions` acotados para localhost + despliegues típicos (`fly.dev`, `up.railway.app`).
 
 - [x] **Documentación (`README.md` de la extensión)**
   - [x] Lista de endpoints usados (`GET /analyze`).
@@ -53,7 +53,7 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
   - Badge `Cache` agregado en resultados cuando `cached === true`.
 
 - [x] **`/openapi.json` o ayuda inline**
-  - Link a `Docs API` (`{baseUrl}/docs`) agregado en footer del popup.
+  - Se mantiene ayuda inline de la extensión; se retiró el link `Docs API` del popup por decisión de producto.
 
 ---
 
@@ -62,8 +62,16 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
 - [ ] Analizar página pública HTTP/HTTPS contra servidor local Docker y contra build `npm run dev`.
 - [ ] Probar selector inválido y selector inexistente (esperar códigos y mensajes coherentes).
 - [ ] Provocar 429 (varias ejecuciones) y confirmar mensaje usable.
-- [ ] Cambiar sólo URL base en opciones y comprobar que `GET /analyze` sigue funcionando.
+- [ ] Validar `VITE_ANALYZE_API_BASE_URL` en build (sin opciones de URL en popup) y comprobar que `GET /analyze` sigue funcionando.
 - [x] `npm run build` de la extensión sin errores de tipos tras actualizar `types.ts`.
+
+---
+
+## Decisión de producto vigente
+
+- [x] El popup no expone configuración de servidor (sin input ni guardar URL).
+- [x] El popup no muestra enlace `Docs API`.
+- [x] La URL base del backend se resuelve por build/env y fallback de desarrollo.
 
 ---
 

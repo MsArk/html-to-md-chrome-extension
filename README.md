@@ -110,18 +110,12 @@ La respuesta de éxito esperada es:
 
 ## Configuración de URL del servidor
 
-Orden de precedencia de URL base:
+La URL base del backend ya **no se configura en el popup**. Se define en build:
 
-1. Valor guardado por usuario en el popup (`chrome.storage.sync`, clave `analyzeApiBaseUrl`)
-2. Variable de entorno de build `VITE_ANALYZE_API_BASE_URL`
-3. Fallback por defecto: `http://localhost:3000`
+1. Variable de entorno `VITE_ANALYZE_API_BASE_URL`
+2. Fallback por defecto para desarrollo: `http://localhost:3000`
 
-### Opción 1: desde el popup
-
-- Campo **Servidor API** + botón **Guardar**
-- Persistencia en `chrome.storage.sync`
-
-### Opción 2: por variable de entorno en build
+### Configurar por variable de entorno en build
 
 ```bash
 VITE_ANALYZE_API_BASE_URL=https://tu-api.fly.dev npm run build
@@ -179,7 +173,6 @@ Si el backend responde `202` (flujo async/webhook), la extensión no hace pollin
 |---------|--------|
 | `activeTab` | Leer la URL de la pestaña activa |
 | `tabs` | Consultar tabs con `chrome.tabs.query` |
-| `storage` | Persistir URL base del API en `chrome.storage.sync` |
 
 `host_permissions` declarados en `public/manifest.json`:
 
@@ -206,7 +199,6 @@ Con Docker Compose:
 docker compose up -d
 ```
 
-Endpoints de ayuda del servicio:
+Endpoint de ayuda del servicio:
 
-- `GET /docs` (Swagger UI)
 - `GET /openapi.json` (contrato OpenAPI)

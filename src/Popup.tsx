@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   FileCode2,
   FileText,
@@ -119,21 +119,13 @@ export default function Popup() {
     queued,
     error,
     currentUrl,
-    serverUrl,
     isSubmitting,
     analyze,
     reset,
-    updateServerUrl,
   } = useAnalyze();
   const [copied, setCopied] = useState(false);
   const [selector, setSelector] = useState('');
   const [cleanEnabled, setCleanEnabled] = useState(false);
-  const [serverUrlDraft, setServerUrlDraft] = useState(serverUrl);
-  const [serverFeedback, setServerFeedback] = useState<string | null>(null);
-
-  useEffect(() => {
-    setServerUrlDraft(serverUrl);
-  }, [serverUrl]);
 
   async function handleCopy() {
     if (!data) return;
@@ -152,21 +144,6 @@ export default function Popup() {
     await analyze({ selector, clean: cleanEnabled });
   }
 
-  async function handleSaveServerUrl() {
-    try {
-      await updateServerUrl(serverUrlDraft);
-      setServerFeedback('URL guardada.');
-      setTimeout(() => setServerFeedback(null), 2500);
-    } catch (err: unknown) {
-      setServerFeedback(err instanceof Error ? err.message : 'No se pudo guardar la URL.');
-    }
-  }
-
-  function openApiDocs() {
-    const docsUrl = `${serverUrl.replace(/\/$/, '')}/docs`;
-    chrome.tabs.create({ url: docsUrl });
-  }
-
   return (
     <div className="popup">
       {/* ── Header ── */}
@@ -181,24 +158,6 @@ export default function Popup() {
       </header>
 
       <section className="config-card">
-        <label className="field-label" htmlFor="server-url">Servidor API</label>
-        <div className="field-row">
-          <input
-            id="server-url"
-            className="field-input"
-            value={serverUrlDraft}
-            onChange={(event) => setServerUrlDraft(event.target.value)}
-            placeholder="http://localhost:3000"
-            disabled={isSubmitting}
-          />
-          <button
-            className="btn-secondary"
-            onClick={handleSaveServerUrl}
-            disabled={isSubmitting || serverUrlDraft.trim() === serverUrl}
-          >
-            Guardar
-          </button>
-        </div>
         <label className="field-label" htmlFor="selector">Selector CSS (opcional)</label>
         <input
           id="selector"
@@ -217,7 +176,6 @@ export default function Popup() {
           />
           <span>Aplicar limpieza `clean=standard`</span>
         </label>
-        {serverFeedback && <p className="config-feedback">{serverFeedback}</p>}
       </section>
 
       {/* ── IDLE ── */}
@@ -324,10 +282,6 @@ export default function Popup() {
         <button type="button" className="popup-doc-link" onClick={() => openExtensionHtml('preview.html')}>
           <ExternalLink size={12} aria-hidden />
           Informacion de la extension
-        </button>
-        <button type="button" className="popup-doc-link" onClick={openApiDocs}>
-          <ExternalLink size={12} aria-hidden />
-          Docs API
         </button>
       </footer>
     </div>

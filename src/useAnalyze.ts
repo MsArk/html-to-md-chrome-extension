@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   AnalyzeClientError,
   AnalyzeQueuedResponse,
@@ -8,7 +8,6 @@ import {
 } from './types';
 
 const DEFAULT_SERVER_URL = 'http://localhost:3000';
-const SERVER_URL_STORAGE_KEY = 'analyzeApiBaseUrl';
 const REQUEST_TIMEOUT_MS = 30_000;
 
 const ERROR_MESSAGES_ES: Record<string, string> = {
@@ -106,64 +105,14 @@ function getInitialServerUrl(): string {
   return DEFAULT_SERVER_URL;
 }
 
-async function getServerUrlFromStorage(): Promise<string | null> {
-  if (!chrome?.storage?.sync) {
-    return null;
-  }
-  const value = await chrome.storage.sync.get([SERVER_URL_STORAGE_KEY]);
-  const candidate = value[SERVER_URL_STORAGE_KEY];
-  if (typeof candidate === 'string' && candidate.trim()) {
-    return candidate.trim().replace(/\/$/, '');
-  }
-  return null;
-}
-
-async function saveServerUrlToStorage(value: string): Promise<void> {
-  if (!chrome?.storage?.sync) {
-    return;
-  }
-  await chrome.storage.sync.set({ [SERVER_URL_STORAGE_KEY]: value });
-}
-
 export function useAnalyze() {
+  const apiBaseUrl = getInitialServerUrl();
   const [status, setStatus] = useState<Status>('idle');
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [queued, setQueued] = useState<AnalyzeQueuedResponse | null>(null);
   const [error, setError] = useState<AnalyzeClientError | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string>('');
-  const [serverUrl, setServerUrl] = useState<string>(getInitialServerUrl);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    getServerUrlFromStorage()
-      .then((stored) => {
-        if (!mounted || !stored) {
-          return;
-        }
-        setServerUrl(stored);
-      })
-      .catch(() => {
-        // no-op: keeps env/default fallback
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const updateServerUrl = useCallback(async (nextValue: string) => {
-    const normalized = nextValue.trim().replace(/\/$/, '');
-    if (!normalized) {
-      throw new Error('La URL base no puede estar vacia.');
-    }
-    try {
-      new URL(normalized);
-    } catch {
-      throw new Error('La URL base no es valida.');
-    }
-    await saveServerUrlToStorage(normalized);
-    setServerUrl(normalized);
-  }, []);
 
   const analyze = useCallback(async (options?: AnalyzeOptions) => {
     if (isSubmitting) {
@@ -204,7 +153,7 @@ export function useAnalyze() {
       }
 
       const response = await fetch(
-        `${serverUrl}/analyze?${query.toString()}`,
+        `${apiBaseUrl}/analyze?${query.toString()}`,
         { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }
       );
 
@@ -238,7 +187,7 @@ export function useAnalyze() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [isSubmitting, serverUrl]);
+  }, [apiBaseUrl, isSubmitting]);
 
   const reset = useCallback(() => {
     setStatus('idle');
@@ -254,11 +203,9 @@ export function useAnalyze() {
     queued,
     error,
     currentUrl,
-    serverUrl,
     isSubmitting,
     analyze,
     reset,
-    updateServerUrl,
     requestTimeoutMs: REQUEST_TIMEOUT_MS,
   };
 }
