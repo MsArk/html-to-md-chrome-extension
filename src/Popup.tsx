@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FileCode2,
   FileText,
@@ -41,6 +41,14 @@ function slugFromUrl(url: string): string {
     return new URL(url).hostname.replace(/\./g, '_');
   } catch {
     return 'page';
+  }
+}
+
+function hostnameFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
   }
 }
 
@@ -105,8 +113,27 @@ function MarkdownPreview({ content }: { content: string }) {
 // ─── main component ──────────────────────────────────────────────────────────
 
 export default function Popup() {
-  const { status, data, error, currentUrl, analyze, reset } = useAnalyze();
+  const {
+    status,
+    data,
+    queued,
+    error,
+    currentUrl,
+    serverUrl,
+    isSubmitting,
+    analyze,
+    reset,
+    updateServerUrl,
+  } = useAnalyze();
   const [copied, setCopied] = useState(false);
+  const [selector, setSelector] = useState('');
+  const [cleanEnabled, setCleanEnabled] = useState(false);
+  const [serverUrlDraft, setServerUrlDraft] = useState(serverUrl);
+  const [serverFeedback, setServerFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    setServerUrlDraft(serverUrl);
+  }, [serverUrl]);
 
   async function handleCopy() {
     if (!data) return;
@@ -119,6 +146,25 @@ export default function Popup() {
     if (!data) return;
     const filename = `${slugFromUrl(data.url)}_${Date.now()}.md`;
     downloadBlob(data.markdown.content, filename);
+  }
+
+  async function handleAnalyze() {
+    await analyze({ selector, clean: cleanEnabled });
+  }
+
+  async function handleSaveServerUrl() {
+    try {
+      await updateServerUrl(serverUrlDraft);
+      setServerFeedback('URL guardada.');
+      setTimeout(() => setServerFeedback(null), 2500);
+    } catch (err: unknown) {
+      setServerFeedback(err instanceof Error ? err.message : 'No se pudo guardar la URL.');
+    }
+  }
+
+  function openApiDocs() {
+    const docsUrl = `${serverUrl.replace(/\/$/, '')}/docs`;
+    chrome.tabs.create({ url: docsUrl });
   }
 
   return (
@@ -134,15 +180,55 @@ export default function Popup() {
         </div>
       </header>
 
+      <section className="config-card">
+        <label className="field-label" htmlFor="server-url">Servidor API</label>
+        <div className="field-row">
+          <input
+            id="server-url"
+            className="field-input"
+            value={serverUrlDraft}
+            onChange={(event) => setServerUrlDraft(event.target.value)}
+            placeholder="http://localhost:3000"
+            disabled={isSubmitting}
+          />
+          <button
+            className="btn-secondary"
+            onClick={handleSaveServerUrl}
+            disabled={isSubmitting || serverUrlDraft.trim() === serverUrl}
+          >
+            Guardar
+          </button>
+        </div>
+        <label className="field-label" htmlFor="selector">Selector CSS (opcional)</label>
+        <input
+          id="selector"
+          className="field-input"
+          value={selector}
+          onChange={(event) => setSelector(event.target.value)}
+          placeholder="main, article, #contenido"
+          disabled={isSubmitting}
+        />
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={cleanEnabled}
+            onChange={(event) => setCleanEnabled(event.target.checked)}
+            disabled={isSubmitting}
+          />
+          <span>Aplicar limpieza `clean=standard`</span>
+        </label>
+        {serverFeedback && <p className="config-feedback">{serverFeedback}</p>}
+      </section>
+
       {/* ── IDLE ── */}
       {status === 'idle' && (
         <div className="idle-view">
           <p className="idle-desc">
             Analiza la pestaña activa: convierte su HTML a Markdown y cuenta tokens para la IA.
           </p>
-          <button className="btn-primary" onClick={() => analyze()}>
+          <button className="btn-primary" onClick={handleAnalyze} disabled={isSubmitting}>
             <Zap size={16} />
-            Analizar esta página
+            {isSubmitting ? 'Analizando...' : 'Analizar esta pagina'}
           </button>
         </div>
       )}
@@ -152,7 +238,18 @@ export default function Popup() {
         <div className="loading-view">
           <Loader2 size={32} className="spin" />
           <p>Analizando…</p>
-          {currentUrl && <span className="url-chip">{new URL(currentUrl).hostname}</span>}
+          {currentUrl && <span className="url-chip">{hostnameFromUrl(currentUrl)}</span>}
+        </div>
+      )}
+
+      {status === 'queued' && queued && (
+        <div className="error-view queued-view">
+          <Loader2 size={24} className="spin" />
+          <p>Solicitud encolada. El backend la procesa en segundo plano.</p>
+          <p className="error-meta">URL: {hostnameFromUrl(queued.url)}</p>
+          <button className="btn-secondary" onClick={reset}>
+            <RotateCcw size={14} /> Nueva consulta
+          </button>
         </div>
       )}
 
@@ -160,7 +257,8 @@ export default function Popup() {
       {status === 'error' && (
         <div className="error-view">
           <AlertCircle size={32} />
-          <p>{error}</p>
+          <p>{error?.message ?? 'Error desconocido'}</p>
+          {error?.code && <p className="error-meta">Codigo: {error.code}</p>}
           <button className="btn-secondary" onClick={reset}>
             <RotateCcw size={14} /> Reintentar
           </button>
@@ -173,7 +271,8 @@ export default function Popup() {
           {/* URL */}
           <div className="result-url">
             <CheckCircle2 size={14} />
-            <span title={data.url}>{new URL(data.url).hostname}</span>
+            <span title={data.url}>{hostnameFromUrl(data.url)}</span>
+            {data.cached && <span className="cache-badge">Cache</span>}
             <span className="timing">{data.timingsMs.total}ms</span>
           </div>
 
@@ -222,13 +321,13 @@ export default function Popup() {
       )}
 
       <footer className="popup-footer">
-        <button
-          type="button"
-          className="popup-doc-link"
-          onClick={() => openExtensionHtml('preview.html')}
-        >
+        <button type="button" className="popup-doc-link" onClick={() => openExtensionHtml('preview.html')}>
           <ExternalLink size={12} aria-hidden />
-          Información de la extensión
+          Informacion de la extension
+        </button>
+        <button type="button" className="popup-doc-link" onClick={openApiDocs}>
+          <ExternalLink size={12} aria-hidden />
+          Docs API
         </button>
       </footer>
     </div>

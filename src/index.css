@@ -60,6 +60,54 @@ body { background: var(--bg); margin: 0; }
 }
 .idle-desc { color: var(--text-muted); line-height: 1.5; }
 
+.config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg2);
+}
+
+.field-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.field-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.field-input:focus {
+  outline: 1px solid var(--accent);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.config-feedback {
+  font-size: 11px;
+  color: var(--accent);
+}
+
 .server-hint {
   display: flex; align-items: center; gap: 5px;
   color: var(--text-muted); font-size: 11px;
@@ -89,6 +137,15 @@ body { background: var(--bg); margin: 0; }
   color: var(--red); text-align: center; line-height: 1.5;
 }
 
+.queued-view {
+  color: var(--text);
+}
+
+.error-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 /* ── Result view ── */
 .result-view {
   display: flex; flex-direction: column; gap: 12px;
@@ -106,6 +163,15 @@ body { background: var(--bg); margin: 0; }
 .timing {
   margin-left: auto; color: var(--text-muted); font-size: 10px;
   white-space: nowrap;
+}
+
+.cache-badge {
+  font-size: 10px;
+  color: var(--orange);
+  border: 1px solid rgba(251, 146, 60, 0.35);
+  background: rgba(251, 146, 60, 0.1);
+  border-radius: 999px;
+  padding: 1px 6px;
 }
 
 /* ── Stats grid ── */
@@ -186,6 +252,7 @@ body { background: var(--bg); margin: 0; }
   transition: opacity .15s;
 }
 .btn-primary:hover { opacity: .85; }
+.btn-primary:disabled { opacity: .55; cursor: not-allowed; }
 
 .btn-secondary {
   display: flex; align-items: center; gap: 6px;
@@ -195,6 +262,7 @@ body { background: var(--bg); margin: 0; }
   font-size: 12px; transition: background .15s;
 }
 .btn-secondary:hover { background: var(--border); }
+.btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
 
 .btn-action {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -228,7 +296,7 @@ body { background: var(--bg); margin: 0; }
   padding-top: 10px;
   border-top: 1px solid var(--border);
   display: flex;
-  justify-content: center;
+   justify-content: space-between;
 }
 .popup-doc-link {
   display: inline-flex;

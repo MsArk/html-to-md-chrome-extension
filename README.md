@@ -80,23 +80,82 @@ La extensión aparecerá en la barra de herramientas.
 
 ---
 
-## Configuración del servidor
+## Endpoint y parámetros soportados
 
-Por defecto la extensión apunta a `http://localhost:3000`.
+La extensión usa `GET /analyze` del microservicio `convert-html-to-markdown`.
 
-Para cambiar la URL del servidor, edita `src/useAnalyze.ts`:
+### Query params que envía el popup
 
-```ts
-const SERVER_URL = 'http://localhost:3000'; // ← cámbialo aquí
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `url` | string (requerido) | URL HTTP/HTTPS de la pestaña activa. |
+| `selector` | string (opcional) | Selector CSS para extraer solo una parte del HTML. |
+| `clean` | `minimal` o `standard` | El popup envía `standard` cuando activas “Aplicar limpieza”; en caso contrario `minimal`. |
+
+La respuesta de éxito esperada es:
+
+```json
+{
+  "url": "https://ejemplo.com/",
+  "html": { "tokens": 0, "characters": 0, "content": "..." },
+  "markdown": { "tokens": 0, "characters": 0, "content": "..." },
+  "timingsMs": { "fetch": 0, "convert": 0, "tokenize": 0, "total": 0 },
+  "cached": true
+}
 ```
 
-Si despliegas el servidor en producción (Railway, Fly.io, etc.):
+`cached` es opcional (solo aparece en hits de caché).
 
-```ts
-const SERVER_URL = 'https://tu-servidor.fly.dev';
+---
+
+## Configuración de URL del servidor
+
+Orden de precedencia de URL base:
+
+1. Valor guardado por usuario en el popup (`chrome.storage.sync`, clave `analyzeApiBaseUrl`)
+2. Variable de entorno de build `VITE_ANALYZE_API_BASE_URL`
+3. Fallback por defecto: `http://localhost:3000`
+
+### Opción 1: desde el popup
+
+- Campo **Servidor API** + botón **Guardar**
+- Persistencia en `chrome.storage.sync`
+
+### Opción 2: por variable de entorno en build
+
+```bash
+VITE_ANALYZE_API_BASE_URL=https://tu-api.fly.dev npm run build
 ```
 
-> **CORS**: Asegúrate de que el servidor Express tenga `cors()` habilitado (ya lo tiene por defecto en este proyecto).
+> Timeout del cliente en extensión: **30s** (`REQUEST_TIMEOUT_MS` en `src/useAnalyze.ts`).
+
+---
+
+## Manejo de errores (`error.code`)
+
+La extensión intenta parsear siempre `{ error: { code, message, details? } }` y mostrar mensaje en español + código técnico.
+
+| `error.code` | Significado en UI |
+|--------------|-------------------|
+| `INVALID_URL` | URL inválida o no soportada |
+| `FETCH_FAILED` | Falló descarga remota |
+| `FETCH_TIMEOUT` | Timeout al descargar página |
+| `INVALID_CONTENT_TYPE` | El recurso no parece HTML |
+| `BODY_TOO_LARGE` | Página demasiado grande |
+| `INVALID_SELECTOR` | Selector CSS inválido |
+| `SELECTOR_NOT_FOUND` | Selector válido pero sin coincidencias |
+| `URL_RATE_LIMITED` | Límite por URL alcanzado (429) |
+| `TOO_MANY_REQUESTS` | Límite por IP alcanzado (429) |
+| `INVALID_JSON`, `MISSING_FIELD` | Error de contrato en request |
+| `SERVER_ERROR`, `INTERNAL_SERVER_ERROR` | Error interno del backend |
+
+Para `429`, si el backend devuelve `details.retryAfter` o header `Retry-After`, el popup muestra “Reintenta en Xs”.
+
+---
+
+## Respuesta `202 Accepted`
+
+Si el backend responde `202` (flujo async/webhook), la extensión no hace polling: muestra estado **encolado** y evita romper la UI.
 
 ---
 
@@ -106,10 +165,11 @@ const SERVER_URL = 'https://tu-servidor.fly.dev';
 2. Haz clic en el icono de la extensión
 3. Pulsa **Analizar esta página**
 4. La extensión obtiene la URL activa → llama a `/analyze?url=...` → muestra:
-   - Tokens HTML vs Markdown
-   - % de reducción
-   - Vista previa del Markdown
-   - Botones: **Copiar** al portapapeles / **Descargar** `.md`
+    - Tokens HTML vs Markdown
+    - % de reducción
+    - Badge de caché cuando aplica (`cached`)
+    - Vista previa del Markdown
+    - Botones: **Copiar** al portapapeles / **Descargar** `.md`
 
 ---
 
@@ -119,5 +179,34 @@ const SERVER_URL = 'https://tu-servidor.fly.dev';
 |---------|--------|
 | `activeTab` | Leer la URL de la pestaña activa |
 | `tabs` | Consultar tabs con `chrome.tabs.query` |
+| `storage` | Persistir URL base del API en `chrome.storage.sync` |
 
-No se solicitan permisos de almacenamiento ni de red especiales; las llamadas HTTP al servidor se hacen como `fetch` normal.
+`host_permissions` declarados en `public/manifest.json`:
+
+- `http://localhost:3000/*`
+- `http://127.0.0.1:3000/*`
+- `https://*.fly.dev/*`
+- `https://*.up.railway.app/*`
+
+---
+
+## Ejecutar el microservicio `convert-html-to-markdown`
+
+Desde `Tools/microservicios/convert-html-to-markdown`:
+
+```bash
+pnpm install
+pnpm build
+pnpm start
+```
+
+Con Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+Endpoints de ayuda del servicio:
+
+- `GET /docs` (Swagger UI)
+- `GET /openapi.json` (contrato OpenAPI)

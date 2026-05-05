@@ -3,7 +3,13 @@
   "name": "HTML → Markdown Analyzer",
   "version": "1.0.0",
   "description": "Analiza cualquier web: convierte HTML a Markdown y cuenta tokens GPT-4.",
-  "permissions": ["activeTab", "tabs"],
+  "permissions": ["activeTab", "tabs", "storage"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "https://*.fly.dev/*",
+    "https://*.up.railway.app/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

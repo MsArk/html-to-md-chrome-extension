@@ -1,22 +1,184 @@
-import { useState, useCallback } from 'react';
-import { AnalyzeResponse, Status } from './types';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  AnalyzeClientError,
+  AnalyzeQueuedResponse,
+  AnalyzeResponse,
+  BackendErrorResponse,
+  Status,
+} from './types';
 
-const SERVER_URL = 'http://localhost:3000';
+const DEFAULT_SERVER_URL = 'http://localhost:3000';
+const SERVER_URL_STORAGE_KEY = 'analyzeApiBaseUrl';
+const REQUEST_TIMEOUT_MS = 30_000;
+
+const ERROR_MESSAGES_ES: Record<string, string> = {
+  INVALID_URL: 'La URL no es valida. Usa una direccion http o https.',
+  FETCH_FAILED: 'No se pudo descargar la pagina objetivo.',
+  FETCH_TIMEOUT: 'El servidor tardo demasiado en descargar la pagina.',
+  INVALID_CONTENT_TYPE: 'La URL no devolvio HTML compatible para analizar.',
+  BODY_TOO_LARGE: 'La pagina es demasiado grande para procesarla.',
+  INVALID_SELECTOR: 'El selector CSS es invalido.',
+  SELECTOR_NOT_FOUND: 'El selector no encontro elementos en la pagina.',
+  URL_RATE_LIMITED: 'Demasiadas solicitudes para esta URL. Espera antes de reintentar.',
+  TOO_MANY_REQUESTS: 'Demasiadas solicitudes desde tu IP. Espera antes de reintentar.',
+  INVALID_JSON: 'El servidor recibio JSON invalido.',
+  MISSING_FIELD: 'Falta un campo requerido en la solicitud.',
+  SERVER_ERROR: 'Error interno del servidor. Intenta de nuevo en unos segundos.',
+  INTERNAL_SERVER_ERROR: 'Error interno del servidor. Intenta de nuevo en unos segundos.',
+};
+
+interface AnalyzeOptions {
+  url?: string;
+  selector?: string;
+  clean?: boolean;
+}
+
+function isQueuedResponse(value: unknown): value is AnalyzeQueuedResponse {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    (value as AnalyzeQueuedResponse).queued === true &&
+    typeof (value as AnalyzeQueuedResponse).url === 'string'
+  );
+}
+
+function isBackendErrorResponse(value: unknown): value is BackendErrorResponse {
+  return value !== null && typeof value === 'object' && 'error' in value;
+}
+
+function getRetryAfterSeconds(response: Response, details?: Record<string, unknown>): number | undefined {
+  const fromDetails = details?.retryAfter;
+  if (typeof fromDetails === 'number' && Number.isFinite(fromDetails)) {
+    return fromDetails > 0 ? Math.ceil(fromDetails) : undefined;
+  }
+  if (typeof fromDetails === 'string') {
+    const parsed = Number.parseFloat(fromDetails);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.ceil(parsed);
+    }
+  }
+
+  const retryAfterHeader = response.headers.get('retry-after');
+  if (!retryAfterHeader) {
+    return undefined;
+  }
+  const retryAfterNumber = Number.parseFloat(retryAfterHeader);
+  if (Number.isFinite(retryAfterNumber) && retryAfterNumber > 0) {
+    return Math.ceil(retryAfterNumber);
+  }
+  return undefined;
+}
+
+async function parseHttpError(response: Response): Promise<AnalyzeClientError> {
+  const body = await response.json().catch(() => null);
+  if (isBackendErrorResponse(body) && body.error && typeof body.error.code === 'string') {
+    const code = body.error.code;
+    const details = body.error.details;
+    const retryAfterSeconds = response.status === 429
+      ? getRetryAfterSeconds(response, details)
+      : undefined;
+    const mappedMessage = ERROR_MESSAGES_ES[code] ?? body.error.message;
+    const message = retryAfterSeconds
+      ? `${mappedMessage} Reintenta en ${retryAfterSeconds}s.`
+      : mappedMessage;
+    return {
+      code,
+      details,
+      retryAfterSeconds,
+      message,
+    };
+  }
+
+  const retryAfterSeconds = response.status === 429 ? getRetryAfterSeconds(response) : undefined;
+  const fallbackMessage = response.status === 429
+    ? retryAfterSeconds
+      ? `Demasiadas solicitudes. Reintenta en ${retryAfterSeconds}s.`
+      : 'Demasiadas solicitudes. Espera antes de reintentar.'
+    : `Error del servidor: ${response.status}`;
+  return { message: fallbackMessage, retryAfterSeconds };
+}
+
+function getInitialServerUrl(): string {
+  const envUrl = import.meta.env.VITE_ANALYZE_API_BASE_URL;
+  if (typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim().replace(/\/$/, '');
+  }
+  return DEFAULT_SERVER_URL;
+}
+
+async function getServerUrlFromStorage(): Promise<string | null> {
+  if (!chrome?.storage?.sync) {
+    return null;
+  }
+  const value = await chrome.storage.sync.get([SERVER_URL_STORAGE_KEY]);
+  const candidate = value[SERVER_URL_STORAGE_KEY];
+  if (typeof candidate === 'string' && candidate.trim()) {
+    return candidate.trim().replace(/\/$/, '');
+  }
+  return null;
+}
+
+async function saveServerUrlToStorage(value: string): Promise<void> {
+  if (!chrome?.storage?.sync) {
+    return;
+  }
+  await chrome.storage.sync.set({ [SERVER_URL_STORAGE_KEY]: value });
+}
 
 export function useAnalyze() {
   const [status, setStatus] = useState<Status>('idle');
   const [data, setData] = useState<AnalyzeResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [queued, setQueued] = useState<AnalyzeQueuedResponse | null>(null);
+  const [error, setError] = useState<AnalyzeClientError | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string>('');
+  const [serverUrl, setServerUrl] = useState<string>(getInitialServerUrl);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const analyze = useCallback(async (url?: string) => {
+  useEffect(() => {
+    let mounted = true;
+    getServerUrlFromStorage()
+      .then((stored) => {
+        if (!mounted || !stored) {
+          return;
+        }
+        setServerUrl(stored);
+      })
+      .catch(() => {
+        // no-op: keeps env/default fallback
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const updateServerUrl = useCallback(async (nextValue: string) => {
+    const normalized = nextValue.trim().replace(/\/$/, '');
+    if (!normalized) {
+      throw new Error('La URL base no puede estar vacia.');
+    }
+    try {
+      new URL(normalized);
+    } catch {
+      throw new Error('La URL base no es valida.');
+    }
+    await saveServerUrlToStorage(normalized);
+    setServerUrl(normalized);
+  }, []);
+
+  const analyze = useCallback(async (options?: AnalyzeOptions) => {
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
     setStatus('loading');
     setData(null);
+    setQueued(null);
     setError(null);
 
     try {
       // If no URL provided, get active tab URL
-      let targetUrl = url;
+      let targetUrl = options?.url;
       if (!targetUrl) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         targetUrl = tab?.url ?? '';
@@ -28,14 +190,39 @@ export function useAnalyze() {
 
       setCurrentUrl(targetUrl);
 
+      const query = new URLSearchParams({
+        url: targetUrl,
+      });
+
+      const selector = options?.selector?.trim();
+      if (selector) {
+        query.set('selector', selector);
+      }
+
+      if (typeof options?.clean === 'boolean') {
+        query.set('clean', options.clean ? 'standard' : 'minimal');
+      }
+
       const response = await fetch(
-        `${SERVER_URL}/analyze?url=${encodeURIComponent(targetUrl)}`,
-        { signal: AbortSignal.timeout(30000) }
+        `${serverUrl}/analyze?${query.toString()}`,
+        { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }
       );
 
+      if (response.status === 202) {
+        const body = await response.json().catch(() => null);
+        if (isQueuedResponse(body)) {
+          setQueued(body);
+          setStatus('queued');
+          return;
+        }
+        throw new Error('El servidor respondio 202 pero sin formato valido.');
+      }
+
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error?.message ?? `Error del servidor: ${response.status}`);
+        const parsedError = await parseHttpError(response);
+        setError(parsedError);
+        setStatus('error');
+        return;
       }
 
       const json: AnalyzeResponse = await response.json();
@@ -46,17 +233,32 @@ export function useAnalyze() {
         err instanceof Error
           ? err.message
           : 'Error desconocido. Comprueba que el servidor está corriendo.';
-      setError(message);
+      setError({ message });
       setStatus('error');
+    } finally {
+      setIsSubmitting(false);
     }
-  }, []);
+  }, [isSubmitting, serverUrl]);
 
   const reset = useCallback(() => {
     setStatus('idle');
     setData(null);
+    setQueued(null);
     setError(null);
     setCurrentUrl('');
   }, []);
 
-  return { status, data, error, currentUrl, analyze, reset };
+  return {
+    status,
+    data,
+    queued,
+    error,
+    currentUrl,
+    serverUrl,
+    isSubmitting,
+    analyze,
+    reset,
+    updateServerUrl,
+    requestTimeoutMs: REQUEST_TIMEOUT_MS,
+  };
 }

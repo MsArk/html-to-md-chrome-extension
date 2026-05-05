@@ -15,12 +15,32 @@ export interface AnalyzeResponse {
   url: string;
   html: Stats;
   markdown: Stats;
-  outputFiles: {
-    json: string;
-    html: string;
-    md: string;
-  };
   timingsMs: Timings;
+  cached?: boolean;
 }
 
-export type Status = 'idle' | 'loading' | 'success' | 'error';
+export interface BackendError {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface BackendErrorResponse {
+  error: BackendError;
+}
+
+export interface AnalyzeQueuedResponse {
+  queued: true;
+  url: string;
+  jobId?: string;
+  pollAfterMs?: number;
+}
+
+export interface AnalyzeClientError {
+  message: string;
+  code?: string;
+  retryAfterSeconds?: number;
+  details?: Record<string, unknown>;
+}
+
+export type Status = 'idle' | 'loading' | 'queued' | 'success' | 'error';
