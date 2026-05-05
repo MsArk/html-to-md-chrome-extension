@@ -32,12 +32,14 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
   - [x] Manejo explícito de 429 en UI y botón de analizar deshabilitado durante la solicitud para evitar doble clic agresivo.
 
 - [x] **i18n del popup (EN/ES, default EN)**
-  - [x] Todos los textos visibles del popup salen de diccionario (`en`/`es`).
-  - [x] Selector de idioma en UI con persistencia de preferencia.
-  - [x] Default en inglés y fallback local cuando `chrome.storage.sync` no esté disponible.
+  - [x] Migrado a i18n nativo de Chrome con `chrome.i18n.getMessage(...)`.
+  - [x] Textos visibles del popup movidos a `_locales`: `public/_locales/en/messages.json` y `public/_locales/es/messages.json`.
+  - [x] Selector de idioma removido de la UI; ahora el idioma lo decide Chrome.
+  - [x] `default_locale: "en"` como baseline/fallback en `manifest.json`.
 
 - [x] **Permisos y orígenes (`public/manifest.json`)**
-  - [x] Se mantiene `storage` solo para persistir idioma del popup (EN/ES); `host_permissions` siguen acotados para localhost + despliegues típicos (`fly.dev`, `up.railway.app`).
+  - [x] `storage` eliminado porque ya no hay preferencia de idioma persistida en la extensión.
+  - [x] `host_permissions` siguen acotados para localhost + despliegues típicos (`fly.dev`, `up.railway.app`).
 
 - [x] **Documentación (`README.md` de la extensión)**
   - [x] Lista de endpoints usados (`GET /analyze`).
@@ -77,6 +79,7 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
 - [x] El popup no expone configuración de servidor (sin input ni guardar URL).
 - [x] El popup no muestra enlace `Docs API`.
 - [x] La URL base del backend se resuelve por build/env y fallback de desarrollo.
+- [x] i18n nativo de Chrome como fuente de verdad para EN/ES (sin selector manual en popup).
 
 ---
 

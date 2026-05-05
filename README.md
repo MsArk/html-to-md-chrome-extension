@@ -5,9 +5,9 @@ Extensión Chrome que analiza la pestaña activa usando el servicio `msarknet-co
 ## Idiomas (i18n)
 
 - Soporta interfaz en **inglés (EN)** y **español (ES)**.
-- El idioma por defecto del popup es **inglés (EN)**.
-- Puedes cambiar idioma desde el selector `Language` en la parte superior del popup (`EN`/`ES`).
-- La preferencia se guarda con `chrome.storage.sync` (y usa fallback local si no está disponible).
+- La traducción usa i18n nativo de Chrome: `chrome.i18n.getMessage(...)` + `public/_locales/{en,es}/messages.json`.
+- El idioma lo determina Chrome según la configuración del navegador/SO.
+- `public/manifest.json` declara `default_locale: "en"`, por lo que el fallback baseline es inglés.
 
 ## Estructura del proyecto
 
@@ -134,7 +134,7 @@ VITE_ANALYZE_API_BASE_URL=https://tu-api.fly.dev npm run build
 
 ## Manejo de errores (`error.code`)
 
-La extensión intenta parsear siempre `{ error: { code, message, details? } }` y mostrar mensaje traducido (EN/ES) + código técnico.
+La extensión intenta parsear siempre `{ error: { code, message, details? } }` y mostrar mensaje traducido (EN/ES con `chrome.i18n`) + código técnico.
 
 | `error.code` | Significado en UI |
 |--------------|-------------------|
@@ -180,7 +180,6 @@ Si el backend responde `202` (flujo async/webhook), la extensión no hace pollin
 |---------|--------|
 | `activeTab` | Leer la URL de la pestaña activa |
 | `tabs` | Consultar tabs con `chrome.tabs.query` |
-| `storage` | Guardar el idioma del popup (EN/ES) |
 
 `host_permissions` declarados en `public/manifest.json`:
 

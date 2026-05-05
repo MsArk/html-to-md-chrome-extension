@@ -6,42 +6,25 @@ import {
   BackendErrorResponse,
   Status,
 } from './types';
-import { DEFAULT_LANGUAGE, Language } from './i18n';
+import { I18nKey, t } from './chromeI18n';
 
 const DEFAULT_SERVER_URL = 'http://localhost:3000';
 const REQUEST_TIMEOUT_MS = 30_000;
 
-const ERROR_MESSAGES: Record<Language, Record<string, string>> = {
-  en: {
-    INVALID_URL: 'The URL is not valid. Use an http or https address.',
-    FETCH_FAILED: 'Could not download the target page.',
-    FETCH_TIMEOUT: 'The server took too long to download the page.',
-    INVALID_CONTENT_TYPE: 'The URL did not return compatible HTML for analysis.',
-    BODY_TOO_LARGE: 'The page is too large to process.',
-    INVALID_SELECTOR: 'The CSS selector is invalid.',
-    SELECTOR_NOT_FOUND: 'The selector did not match any elements on the page.',
-    URL_RATE_LIMITED: 'Too many requests for this URL. Wait before retrying.',
-    TOO_MANY_REQUESTS: 'Too many requests from your IP. Wait before retrying.',
-    INVALID_JSON: 'The server received invalid JSON.',
-    MISSING_FIELD: 'A required field is missing in the request.',
-    SERVER_ERROR: 'Internal server error. Try again in a few seconds.',
-    INTERNAL_SERVER_ERROR: 'Internal server error. Try again in a few seconds.',
-  },
-  es: {
-    INVALID_URL: 'La URL no es valida. Usa una direccion http o https.',
-    FETCH_FAILED: 'No se pudo descargar la pagina objetivo.',
-    FETCH_TIMEOUT: 'El servidor tardo demasiado en descargar la pagina.',
-    INVALID_CONTENT_TYPE: 'La URL no devolvio HTML compatible para analizar.',
-    BODY_TOO_LARGE: 'La pagina es demasiado grande para procesarla.',
-    INVALID_SELECTOR: 'El selector CSS es invalido.',
-    SELECTOR_NOT_FOUND: 'El selector no encontro elementos en la pagina.',
-    URL_RATE_LIMITED: 'Demasiadas solicitudes para esta URL. Espera antes de reintentar.',
-    TOO_MANY_REQUESTS: 'Demasiadas solicitudes desde tu IP. Espera antes de reintentar.',
-    INVALID_JSON: 'El servidor recibio JSON invalido.',
-    MISSING_FIELD: 'Falta un campo requerido en la solicitud.',
-    SERVER_ERROR: 'Error interno del servidor. Intenta de nuevo en unos segundos.',
-    INTERNAL_SERVER_ERROR: 'Error interno del servidor. Intenta de nuevo en unos segundos.',
-  },
+const BACKEND_ERROR_KEYS: Record<string, I18nKey> = {
+  INVALID_URL: 'backendErrorInvalidUrl',
+  FETCH_FAILED: 'backendErrorFetchFailed',
+  FETCH_TIMEOUT: 'backendErrorFetchTimeout',
+  INVALID_CONTENT_TYPE: 'backendErrorInvalidContentType',
+  BODY_TOO_LARGE: 'backendErrorBodyTooLarge',
+  INVALID_SELECTOR: 'backendErrorInvalidSelector',
+  SELECTOR_NOT_FOUND: 'backendErrorSelectorNotFound',
+  URL_RATE_LIMITED: 'backendErrorUrlRateLimited',
+  TOO_MANY_REQUESTS: 'backendErrorTooManyRequests',
+  INVALID_JSON: 'backendErrorInvalidJson',
+  MISSING_FIELD: 'backendErrorMissingField',
+  SERVER_ERROR: 'backendErrorServerError',
+  INTERNAL_SERVER_ERROR: 'backendErrorInternalServerError',
 };
 
 interface AnalyzeOptions {
@@ -86,26 +69,17 @@ function getRetryAfterSeconds(response: Response, details?: Record<string, unkno
   return undefined;
 }
 
-function getRateLimitMessage(language: Language, retryAfterSeconds?: number): string {
-  if (language === 'es') {
-    return retryAfterSeconds
-      ? `Demasiadas solicitudes. Reintenta en ${retryAfterSeconds}s.`
-      : 'Demasiadas solicitudes. Espera antes de reintentar.';
-  }
-
+function getRateLimitMessage(retryAfterSeconds?: number): string {
   return retryAfterSeconds
-    ? `Too many requests. Retry in ${retryAfterSeconds}s.`
-    : 'Too many requests. Wait before retrying.';
+    ? t('rateLimitRetry', String(retryAfterSeconds))
+    : t('rateLimitGeneric');
 }
 
-function getServerStatusMessage(language: Language, status: number): string {
-  if (language === 'es') {
-    return `Error del servidor: ${status}`;
-  }
-  return `Server error: ${status}`;
+function getServerStatusMessage(status: number): string {
+  return t('serverErrorStatus', String(status));
 }
 
-async function parseHttpError(response: Response, language: Language): Promise<AnalyzeClientError> {
+async function parseHttpError(response: Response): Promise<AnalyzeClientError> {
   const body = await response.json().catch(() => null);
   if (isBackendErrorResponse(body) && body.error && typeof body.error.code === 'string') {
     const code = body.error.code;
@@ -113,11 +87,10 @@ async function parseHttpError(response: Response, language: Language): Promise<A
     const retryAfterSeconds = response.status === 429
       ? getRetryAfterSeconds(response, details)
       : undefined;
-    const mappedMessage = ERROR_MESSAGES[language][code] ?? body.error.message;
+    const mappedKey = BACKEND_ERROR_KEYS[code];
+    const mappedMessage = mappedKey ? t(mappedKey) : body.error.message;
     const message = retryAfterSeconds
-      ? language === 'es'
-        ? `${mappedMessage} Reintenta en ${retryAfterSeconds}s.`
-        : `${mappedMessage} Retry in ${retryAfterSeconds}s.`
+      ? `${mappedMessage} ${t('retryInSuffix', String(retryAfterSeconds))}`
       : mappedMessage;
     return {
       code,
@@ -129,8 +102,8 @@ async function parseHttpError(response: Response, language: Language): Promise<A
 
   const retryAfterSeconds = response.status === 429 ? getRetryAfterSeconds(response) : undefined;
   const fallbackMessage = response.status === 429
-    ? getRateLimitMessage(language, retryAfterSeconds)
-    : getServerStatusMessage(language, response.status);
+    ? getRateLimitMessage(retryAfterSeconds)
+    : getServerStatusMessage(response.status);
   return { message: fallbackMessage, retryAfterSeconds };
 }
 
@@ -142,7 +115,7 @@ function getInitialServerUrl(): string {
   return DEFAULT_SERVER_URL;
 }
 
-export function useAnalyze(language: Language = DEFAULT_LANGUAGE) {
+export function useAnalyze() {
   const apiBaseUrl = getInitialServerUrl();
   const [status, setStatus] = useState<Status>('idle');
   const [data, setData] = useState<AnalyzeResponse | null>(null);
@@ -171,11 +144,7 @@ export function useAnalyze(language: Language = DEFAULT_LANGUAGE) {
       }
 
       if (!targetUrl || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
-        throw new Error(
-          language === 'es'
-            ? 'La pestana activa no tiene una URL HTTP/HTTPS valida.'
-            : 'The active tab does not have a valid HTTP/HTTPS URL.'
-        );
+        throw new Error(t('errorActiveTabInvalidUrl'));
       }
 
       setCurrentUrl(targetUrl);
@@ -205,15 +174,11 @@ export function useAnalyze(language: Language = DEFAULT_LANGUAGE) {
           setStatus('queued');
           return;
         }
-        throw new Error(
-          language === 'es'
-            ? 'El servidor respondio 202 pero sin formato valido.'
-            : 'The server responded 202 without a valid payload.'
-        );
+        throw new Error(t('errorQueuedInvalidPayload'));
       }
 
       if (!response.ok) {
-        const parsedError = await parseHttpError(response, language);
+        const parsedError = await parseHttpError(response);
         setError(parsedError);
         setStatus('error');
         return;
@@ -226,15 +191,13 @@ export function useAnalyze(language: Language = DEFAULT_LANGUAGE) {
       const message =
         err instanceof Error
           ? err.message
-          : language === 'es'
-            ? 'Error desconocido. Comprueba que el servidor esta corriendo.'
-            : 'Unknown error. Check that the server is running.';
+          : t('errorUnknownServer');
       setError({ message });
       setStatus('error');
     } finally {
       setIsSubmitting(false);
     }
-  }, [apiBaseUrl, isSubmitting, language]);
+  }, [apiBaseUrl, isSubmitting]);
 
   const reset = useCallback(() => {
     setStatus('idle');
