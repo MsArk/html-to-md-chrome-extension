@@ -31,8 +31,13 @@ La extensión Chrome consume el microservicio en `Tools/microservicios/convert-h
 - [x] **Rate limiting**
   - [x] Manejo explícito de 429 en UI y botón de analizar deshabilitado durante la solicitud para evitar doble clic agresivo.
 
+- [x] **i18n del popup (EN/ES, default EN)**
+  - [x] Todos los textos visibles del popup salen de diccionario (`en`/`es`).
+  - [x] Selector de idioma en UI con persistencia de preferencia.
+  - [x] Default en inglés y fallback local cuando `chrome.storage.sync` no esté disponible.
+
 - [x] **Permisos y orígenes (`public/manifest.json`)**
-  - [x] Se retiró `storage` al eliminar configuración de URL en popup; se mantienen `host_permissions` acotados para localhost + despliegues típicos (`fly.dev`, `up.railway.app`).
+  - [x] Se mantiene `storage` solo para persistir idioma del popup (EN/ES); `host_permissions` siguen acotados para localhost + despliegues típicos (`fly.dev`, `up.railway.app`).
 
 - [x] **Documentación (`README.md` de la extensión)**
   - [x] Lista de endpoints usados (`GET /analyze`).

@@ -2,6 +2,13 @@
 
 Extensión Chrome que analiza la pestaña activa usando el servicio `msarknet-convert-html-to-markdown`.
 
+## Idiomas (i18n)
+
+- Soporta interfaz en **inglés (EN)** y **español (ES)**.
+- El idioma por defecto del popup es **inglés (EN)**.
+- Puedes cambiar idioma desde el selector `Language` en la parte superior del popup (`EN`/`ES`).
+- La preferencia se guarda con `chrome.storage.sync` (y usa fallback local si no está disponible).
+
 ## Estructura del proyecto
 
 ```
@@ -127,7 +134,7 @@ VITE_ANALYZE_API_BASE_URL=https://tu-api.fly.dev npm run build
 
 ## Manejo de errores (`error.code`)
 
-La extensión intenta parsear siempre `{ error: { code, message, details? } }` y mostrar mensaje en español + código técnico.
+La extensión intenta parsear siempre `{ error: { code, message, details? } }` y mostrar mensaje traducido (EN/ES) + código técnico.
 
 | `error.code` | Significado en UI |
 |--------------|-------------------|
@@ -173,6 +180,7 @@ Si el backend responde `202` (flujo async/webhook), la extensión no hace pollin
 |---------|--------|
 | `activeTab` | Leer la URL de la pestaña activa |
 | `tabs` | Consultar tabs con `chrome.tabs.query` |
+| `storage` | Guardar el idioma del popup (EN/ES) |
 
 `host_permissions` declarados en `public/manifest.json`:
 

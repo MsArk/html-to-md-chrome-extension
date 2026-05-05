@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FileCode2,
   FileText,
@@ -14,11 +14,15 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useAnalyze } from './useAnalyze';
+import {
+  DEFAULT_LANGUAGE,
+  Language,
+  loadPreferredLanguage,
+  savePreferredLanguage,
+} from './i18n';
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function formatNum(n: number): string {
-  return n.toLocaleString('es-ES');
+function formatNum(n: number, locale: string): string {
+  return n.toLocaleString(locale);
 }
 
 function reductionPercent(htmlTokens: number, mdTokens: number): string {
@@ -57,7 +61,72 @@ function openExtensionHtml(path: string) {
   chrome.tabs.create({ url });
 }
 
-// ─── sub-components ─────────────────────────────────────────────────────────
+const POPUP_TEXT = {
+  en: {
+    title: 'HTML -> Markdown',
+    subtitle: 'Token Analyzer',
+    languageLabel: 'Language',
+    selectorLabel: 'CSS selector (optional)',
+    selectorPlaceholder: 'main, article, #content',
+    cleanToggle: 'Apply clean=standard',
+    idleDescription: 'Analyze the active tab: convert HTML to Markdown and estimate AI tokens.',
+    analyzeAction: 'Analyze this page',
+    analyzingAction: 'Analyzing...',
+    loadingMessage: 'Analyzing...',
+    queuedMessage: 'Request queued. The backend is processing it in the background.',
+    queuedUrl: 'URL:',
+    newQueryAction: 'New query',
+    unknownError: 'Unknown error',
+    errorCode: 'Code:',
+    retryAction: 'Retry',
+    tokensUnit: 'tokens',
+    charsUnit: 'chars',
+    reductionLabel: 'Reduction:',
+    htmlLabel: 'HTML',
+    markdownLabel: 'Markdown',
+    timingUnit: 'ms',
+    markdownPreview: 'Markdown preview',
+    cachedBadge: 'Cached',
+    copiedAction: 'Copied!',
+    copyMarkdownAction: 'Copy Markdown',
+    downloadAction: 'Download .md',
+    extensionInfoAction: 'Extension information',
+    languageEn: 'EN',
+    languageEs: 'ES',
+  },
+  es: {
+    title: 'HTML -> Markdown',
+    subtitle: 'Analizador de Tokens',
+    languageLabel: 'Idioma',
+    selectorLabel: 'Selector CSS (opcional)',
+    selectorPlaceholder: 'main, article, #contenido',
+    cleanToggle: 'Aplicar clean=standard',
+    idleDescription: 'Analiza la pestaña activa: convierte HTML a Markdown y estima tokens para IA.',
+    analyzeAction: 'Analizar esta pagina',
+    analyzingAction: 'Analizando...',
+    loadingMessage: 'Analizando...',
+    queuedMessage: 'Solicitud encolada. El backend la procesa en segundo plano.',
+    queuedUrl: 'URL:',
+    newQueryAction: 'Nueva consulta',
+    unknownError: 'Error desconocido',
+    errorCode: 'Codigo:',
+    retryAction: 'Reintentar',
+    tokensUnit: 'tokens',
+    charsUnit: 'chars',
+    reductionLabel: 'Reduccion:',
+    htmlLabel: 'HTML',
+    markdownLabel: 'Markdown',
+    timingUnit: 'ms',
+    markdownPreview: 'Vista previa Markdown',
+    cachedBadge: 'Cache',
+    copiedAction: 'Copiado!',
+    copyMarkdownAction: 'Copiar Markdown',
+    downloadAction: 'Descargar .md',
+    extensionInfoAction: 'Informacion de la extension',
+    languageEn: 'EN',
+    languageEs: 'ES',
+  },
+} as const;
 
 function StatCard({
   icon,
@@ -65,12 +134,18 @@ function StatCard({
   tokens,
   chars,
   accent,
+  locale,
+  tokensUnit,
+  charsUnit,
 }: {
   icon: React.ReactNode;
   label: string;
   tokens: number;
   chars: number;
   accent: string;
+  locale: string;
+  tokensUnit: string;
+  charsUnit: string;
 }) {
   return (
     <div className={`stat-card ${accent}`}>
@@ -78,29 +153,29 @@ function StatCard({
         {icon}
         <span className="stat-label">{label}</span>
       </div>
-      <div className="stat-tokens">{formatNum(tokens)} <span>tokens</span></div>
-      <div className="stat-chars">{formatNum(chars)} chars</div>
+      <div className="stat-tokens">{formatNum(tokens, locale)} <span>{tokensUnit}</span></div>
+      <div className="stat-chars">{formatNum(chars, locale)} {charsUnit}</div>
     </div>
   );
 }
 
-function ReductionBadge({ reduction }: { reduction: string }) {
+function ReductionBadge({ reduction, label }: { reduction: string; label: string }) {
   return (
     <div className="reduction-badge">
       <Zap size={14} />
-      <span>Reducción: <strong>{reduction}</strong></span>
+      <span>{label} <strong>{reduction}</strong></span>
     </div>
   );
 }
 
-function MarkdownPreview({ content }: { content: string }) {
+function MarkdownPreview({ content, title }: { content: string; title: string }) {
   const [expanded, setExpanded] = useState(false);
   const preview = expanded ? content : content.slice(0, 600) + (content.length > 600 ? '\n...' : '');
 
   return (
     <div className="md-preview">
       <div className="md-preview-header">
-        <span>Vista previa Markdown</span>
+        <span>{title}</span>
         <button className="btn-icon" onClick={() => setExpanded(!expanded)}>
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
@@ -110,9 +185,15 @@ function MarkdownPreview({ content }: { content: string }) {
   );
 }
 
-// ─── main component ──────────────────────────────────────────────────────────
-
 export default function Popup() {
+  const [language, setLanguage] = useState<Language>(DEFAULT_LANGUAGE);
+  const [copied, setCopied] = useState(false);
+  const [selector, setSelector] = useState('');
+  const [cleanEnabled, setCleanEnabled] = useState(false);
+
+  const text = POPUP_TEXT[language];
+  const locale = language === 'es' ? 'es-ES' : 'en-US';
+
   const {
     status,
     data,
@@ -122,10 +203,26 @@ export default function Popup() {
     isSubmitting,
     analyze,
     reset,
-  } = useAnalyze();
-  const [copied, setCopied] = useState(false);
-  const [selector, setSelector] = useState('');
-  const [cleanEnabled, setCleanEnabled] = useState(false);
+  } = useAnalyze(language);
+
+  useEffect(() => {
+    let isMounted = true;
+    loadPreferredLanguage()
+      .then((savedLanguage) => {
+        if (isMounted) {
+          setLanguage(savedLanguage);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleLanguageChange(nextLanguage: Language) {
+    setLanguage(nextLanguage);
+    await savePreferredLanguage(nextLanguage);
+  }
 
   async function handleCopy() {
     if (!data) return;
@@ -146,25 +243,38 @@ export default function Popup() {
 
   return (
     <div className="popup">
-      {/* ── Header ── */}
       <header className="header">
         <div className="header-icon">
           <FileCode2 size={20} />
         </div>
         <div>
-          <h1>HTML → Markdown</h1>
-          <p>Token Analyzer</p>
+          <h1>{text.title}</h1>
+          <p>{text.subtitle}</p>
         </div>
       </header>
 
       <section className="config-card">
-        <label className="field-label" htmlFor="selector">Selector CSS (opcional)</label>
+        <label className="field-label" htmlFor="language">{text.languageLabel}</label>
+        <select
+          id="language"
+          className="field-input"
+          value={language}
+          onChange={(event) => {
+            void handleLanguageChange(event.target.value === 'es' ? 'es' : 'en');
+          }}
+          disabled={isSubmitting}
+        >
+          <option value="en">{text.languageEn}</option>
+          <option value="es">{text.languageEs}</option>
+        </select>
+
+        <label className="field-label" htmlFor="selector">{text.selectorLabel}</label>
         <input
           id="selector"
           className="field-input"
           value={selector}
           onChange={(event) => setSelector(event.target.value)}
-          placeholder="main, article, #contenido"
+          placeholder={text.selectorPlaceholder}
           disabled={isSubmitting}
         />
         <label className="checkbox-row">
@@ -174,28 +284,24 @@ export default function Popup() {
             onChange={(event) => setCleanEnabled(event.target.checked)}
             disabled={isSubmitting}
           />
-          <span>Aplicar limpieza `clean=standard`</span>
+          <span>{text.cleanToggle}</span>
         </label>
       </section>
 
-      {/* ── IDLE ── */}
       {status === 'idle' && (
         <div className="idle-view">
-          <p className="idle-desc">
-            Analiza la pestaña activa: convierte su HTML a Markdown y cuenta tokens para la IA.
-          </p>
+          <p className="idle-desc">{text.idleDescription}</p>
           <button className="btn-primary" onClick={handleAnalyze} disabled={isSubmitting}>
             <Zap size={16} />
-            {isSubmitting ? 'Analizando...' : 'Analizar esta pagina'}
+            {isSubmitting ? text.analyzingAction : text.analyzeAction}
           </button>
         </div>
       )}
 
-      {/* ── LOADING ── */}
       {status === 'loading' && (
         <div className="loading-view">
           <Loader2 size={32} className="spin" />
-          <p>Analizando…</p>
+          <p>{text.loadingMessage}</p>
           {currentUrl && <span className="url-chip">{hostnameFromUrl(currentUrl)}</span>}
         </div>
       )}
@@ -203,77 +309,77 @@ export default function Popup() {
       {status === 'queued' && queued && (
         <div className="error-view queued-view">
           <Loader2 size={24} className="spin" />
-          <p>Solicitud encolada. El backend la procesa en segundo plano.</p>
-          <p className="error-meta">URL: {hostnameFromUrl(queued.url)}</p>
+          <p>{text.queuedMessage}</p>
+          <p className="error-meta">{text.queuedUrl} {hostnameFromUrl(queued.url)}</p>
           <button className="btn-secondary" onClick={reset}>
-            <RotateCcw size={14} /> Nueva consulta
+            <RotateCcw size={14} /> {text.newQueryAction}
           </button>
         </div>
       )}
 
-      {/* ── ERROR ── */}
       {status === 'error' && (
         <div className="error-view">
           <AlertCircle size={32} />
-          <p>{error?.message ?? 'Error desconocido'}</p>
-          {error?.code && <p className="error-meta">Codigo: {error.code}</p>}
+          <p>{error?.message ?? text.unknownError}</p>
+          {error?.code && <p className="error-meta">{text.errorCode} {error.code}</p>}
           <button className="btn-secondary" onClick={reset}>
-            <RotateCcw size={14} /> Reintentar
+            <RotateCcw size={14} /> {text.retryAction}
           </button>
         </div>
       )}
 
-      {/* ── SUCCESS ── */}
       {status === 'success' && data && (
         <div className="result-view">
-          {/* URL */}
           <div className="result-url">
             <CheckCircle2 size={14} />
             <span title={data.url}>{hostnameFromUrl(data.url)}</span>
-            {data.cached && <span className="cache-badge">Cache</span>}
-            <span className="timing">{data.timingsMs.total}ms</span>
+            {data.cached && <span className="cache-badge">{text.cachedBadge}</span>}
+            <span className="timing">{data.timingsMs.total}{text.timingUnit}</span>
           </div>
 
-          {/* Stats */}
           <div className="stats-grid">
             <StatCard
               icon={<FileCode2 size={16} />}
-              label="HTML"
+              label={text.htmlLabel}
               tokens={data.html.tokens}
               chars={data.html.characters}
               accent="accent-html"
+              locale={locale}
+              tokensUnit={text.tokensUnit}
+              charsUnit={text.charsUnit}
             />
             <StatCard
               icon={<FileText size={16} />}
-              label="Markdown"
+              label={text.markdownLabel}
               tokens={data.markdown.tokens}
               chars={data.markdown.characters}
               accent="accent-md"
+              locale={locale}
+              tokensUnit={text.tokensUnit}
+              charsUnit={text.charsUnit}
             />
           </div>
 
           <ReductionBadge
             reduction={reductionPercent(data.html.tokens, data.markdown.tokens)}
+            label={text.reductionLabel}
           />
 
-          {/* Actions */}
           <div className="actions">
             <button className="btn-action" onClick={handleCopy}>
               {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-              {copied ? '¡Copiado!' : 'Copiar Markdown'}
+              {copied ? text.copiedAction : text.copyMarkdownAction}
             </button>
             <button className="btn-action" onClick={handleDownload}>
               <Download size={14} />
-              Descargar .md
+              {text.downloadAction}
             </button>
           </div>
 
-          {/* Markdown Preview */}
-          <MarkdownPreview content={data.markdown.content} />
+          <MarkdownPreview content={data.markdown.content} title={text.markdownPreview} />
 
-          {/* Reset */}
           <button className="btn-ghost" onClick={reset}>
-            <RotateCcw size={12} /> Nueva consulta
+            <RotateCcw size={12} /> {text.newQueryAction}
           </button>
         </div>
       )}
@@ -281,7 +387,7 @@ export default function Popup() {
       <footer className="popup-footer">
         <button type="button" className="popup-doc-link" onClick={() => openExtensionHtml('preview.html')}>
           <ExternalLink size={12} aria-hidden />
-          Informacion de la extension
+          {text.extensionInfoAction}
         </button>
       </footer>
     </div>
