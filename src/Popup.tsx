@@ -115,6 +115,7 @@ function MarkdownPreview({ content, title }: { content: string; title: string })
 
 export default function Popup() {
   const [copied, setCopied] = useState(false);
+  const [manualUrl, setManualUrl] = useState('');
   const [selector, setSelector] = useState('');
   const [cleanEnabled, setCleanEnabled] = useState(false);
 
@@ -145,7 +146,7 @@ export default function Popup() {
   }
 
   async function handleAnalyze() {
-    await analyze({ selector, clean: cleanEnabled });
+    await analyze({ url: manualUrl, selector, clean: cleanEnabled });
   }
 
   return (
@@ -161,6 +162,16 @@ export default function Popup() {
       </header>
 
       <section className="config-card">
+        <label className="field-label" htmlFor="manual-url">{t('urlLabel')}</label>
+        <input
+          id="manual-url"
+          className="field-input"
+          value={manualUrl}
+          onChange={(event) => setManualUrl(event.target.value)}
+          placeholder={t('urlPlaceholder')}
+          disabled={isSubmitting}
+        />
+
         <label className="field-label" htmlFor="selector">{t('selectorLabel')}</label>
         <input
           id="selector"

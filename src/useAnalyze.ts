@@ -7,12 +7,14 @@ import {
   Status,
 } from './types';
 import { I18nKey, t } from './chromeI18n';
+import { resolveTargetUrl } from './urlInput';
 
 const DEFAULT_SERVER_URL = 'http://localhost:3000';
 const REQUEST_TIMEOUT_MS = 30_000;
 
 const BACKEND_ERROR_KEYS: Record<string, I18nKey> = {
   INVALID_URL: 'backendErrorInvalidUrl',
+  SSRF_PROTECTION: 'backendErrorSsrfProtection',
   FETCH_FAILED: 'backendErrorFetchFailed',
   FETCH_TIMEOUT: 'backendErrorFetchTimeout',
   INVALID_CONTENT_TYPE: 'backendErrorInvalidContentType',
@@ -79,7 +81,24 @@ function getServerStatusMessage(status: number): string {
   return t('serverErrorStatus', String(status));
 }
 
-async function parseHttpError(response: Response): Promise<AnalyzeClientError> {
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1' || normalized === '[::1]';
+}
+
+function isLoopbackTarget(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    return isLoopbackHost(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function parseHttpError(response: Response, targetUrl?: string): Promise<AnalyzeClientError> {
   const body = await response.json().catch(() => null);
   if (isBackendErrorResponse(body) && body.error && typeof body.error.code === 'string') {
     const code = body.error.code;
@@ -88,7 +107,12 @@ async function parseHttpError(response: Response): Promise<AnalyzeClientError> {
       ? getRetryAfterSeconds(response, details)
       : undefined;
     const mappedKey = BACKEND_ERROR_KEYS[code];
-    const mappedMessage = mappedKey ? t(mappedKey) : body.error.message;
+    const localhostBlockedByPolicy = code === 'INVALID_URL' && isLoopbackTarget(targetUrl);
+    const mappedMessage = localhostBlockedByPolicy
+      ? t('backendErrorLoopbackBlocked')
+      : mappedKey
+        ? t(mappedKey)
+        : body.error.message;
     const message = retryAfterSeconds
       ? `${mappedMessage} ${t('retryInSuffix', String(retryAfterSeconds))}`
       : mappedMessage;
@@ -136,16 +160,14 @@ export function useAnalyze() {
     setError(null);
 
     try {
-      // If no URL provided, get active tab URL
-      let targetUrl = options?.url;
-      if (!targetUrl) {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        targetUrl = tab?.url ?? '';
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const resolvedTarget = resolveTargetUrl(options?.url, tab?.url);
+      if (!resolvedTarget) {
+        const hasManualInput = Boolean(options?.url?.trim());
+        throw new Error(t(hasManualInput ? 'errorManualUrlInvalid' : 'errorActiveTabInvalidUrl'));
       }
 
-      if (!targetUrl || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
-        throw new Error(t('errorActiveTabInvalidUrl'));
-      }
+      const targetUrl = resolvedTarget.url;
 
       setCurrentUrl(targetUrl);
 
@@ -178,7 +200,7 @@ export function useAnalyze() {
       }
 
       if (!response.ok) {
-        const parsedError = await parseHttpError(response);
+        const parsedError = await parseHttpError(response, targetUrl);
         setError(parsedError);
         setStatus('error');
         return;

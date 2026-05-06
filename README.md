@@ -95,9 +95,20 @@ La extensión usa `GET /analyze` del microservicio `convert-html-to-markdown`.
 
 | Parámetro | Tipo | Descripción |
 |-----------|------|-------------|
-| `url` | string (requerido) | URL HTTP/HTTPS de la pestaña activa. |
+| `url` | string (requerido) | URL HTTP/HTTPS de la pestaña activa o URL ingresada manualmente en el popup. |
 | `selector` | string (opcional) | Selector CSS para extraer solo una parte del HTML. |
 | `clean` | `minimal` o `standard` | El popup envía `standard` cuando activas “Aplicar limpieza”; en caso contrario `minimal`. |
+
+### URL manual desde popup
+
+- El campo **URL (opcional)** permite analizar una URL distinta de la pestana activa.
+- Si dejas el campo vacio, la extensión mantiene el flujo actual: usa la URL de la pestana activa.
+- Para hosts locales, se normaliza automaticamente cuando no hay esquema:
+  - `localhost:4321` -> `http://localhost:4321`
+  - `127.0.0.1:3000/path` -> `http://127.0.0.1:3000/path`
+  - `[::1]:5173` -> `http://[::1]:5173`
+- Importante: la normalizacion solo corrige el formato. Si el backend tiene proteccion SSRF estricta, puede rechazar hosts loopback (localhost/127.0.0.1/::1).
+- Para dominios no locales, debes incluir `http://` o `https://`.
 
 La respuesta de éxito esperada es:
 
@@ -139,6 +150,7 @@ La extensión intenta parsear siempre `{ error: { code, message, details? } }` y
 | `error.code` | Significado en UI |
 |--------------|-------------------|
 | `INVALID_URL` | URL inválida o no soportada |
+| `SSRF_PROTECTION` | Destino bloqueado por política SSRF del backend |
 | `FETCH_FAILED` | Falló descarga remota |
 | `FETCH_TIMEOUT` | Timeout al descargar página |
 | `INVALID_CONTENT_TYPE` | El recurso no parece HTML |
@@ -164,8 +176,9 @@ Si el backend responde `202` (flujo async/webhook), la extensión no hace pollin
 
 1. Navega a cualquier página web
 2. Haz clic en el icono de la extensión
-3. Pulsa **Analizar esta página**
-4. La extensión obtiene la URL activa → llama a `/analyze?url=...` → muestra:
+3. (Opcional) Ingresa una URL en el campo URL para analizarla en lugar de la pestana activa
+4. Pulsa **Analizar esta página**
+5. La extensión toma la URL ingresada (o la activa si no hay entrada) → llama a `/analyze?url=...` → muestra:
     - Tokens HTML vs Markdown
     - % de reducción
     - Badge de caché cuando aplica (`cached`)
